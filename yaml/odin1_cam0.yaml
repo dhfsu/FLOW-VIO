@@ -1,0 +1,18 @@
+%YAML:1.0
+---
+
+# Odin1 #28 FishPoly calibration approximated by the KANNALA_BRANDT model.
+# The coefficients are the radial fit used by the VINS-Mono Odin1 config.
+model_type: KANNALA_BRANDT
+camera_name: odin1_camera
+image_width: 1600
+image_height: 1296
+projection_parameters:
+   k2: -2.0458984117825329e-02
+   k3: -1.8777176069903153e-03
+   k4: -1.1969766539799971e-05
+   k5: -2.8318021088181858e-04
+   mu: 7.3796613595404403e+02
+   mv: 7.3833757548360790e+02
+   u0: 7.7498906720636205e+02
+   v0: 6.3393873803262476e+02

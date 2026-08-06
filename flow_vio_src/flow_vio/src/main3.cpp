@@ -20,6 +20,7 @@
 #include<random>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/Imu.h>
+#include <sensor_msgs/CompressedImage.h>
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/image_encodings.h>
@@ -56,6 +57,20 @@ cv::Mat getImageFromMsg(const sensor_msgs::ImageConstPtr& img_msg) {
 }
 
 
+
+cv::Mat getImageFromCompressedMsg(const sensor_msgs::CompressedImageConstPtr& img_msg) {
+    if (img_msg->data.empty())
+        return cv::Mat();
+    try {
+        cv_bridge::CvImageConstPtr ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
+        return ptr->image.clone();
+    } catch (const cv_bridge::Exception& e) {
+        ROS_ERROR_STREAM("Failed to decode compressed image: " << e.what());
+        return cv::Mat();
+    }
+}
+
+
 void processoneimage() {
     cv::Mat image0, image1;
     double time = 0;
@@ -72,10 +87,24 @@ void processoneimage() {
 
 
 void img0_callback(const sensor_msgs::ImageConstPtr& img_msg) {
+    if (!img_msg)
+        return;
     if (img_msg->header.stamp.toSec() < start_timestamp)
         return;
     img0_buf.push(img_msg);
     processoneimage();
+}
+
+
+void img0_compressed_callback(const sensor_msgs::CompressedImageConstPtr& img_msg) {
+    if (!img_msg)
+        return;
+    if (img_msg->header.stamp.toSec() < start_timestamp)
+        return;
+
+    cv::Mat image = getImageFromCompressedMsg(img_msg);
+    if (!image.empty())
+        swf_optimization->InputImage(img_msg->header.stamp.toSec(), image, cv::Mat());
 }
 
 
@@ -162,8 +191,19 @@ int main(int argc, char** argv) {
         auto m = *it;
         if (m.getTopic() == IMU_TOPIC)
             imu_callback(m.instantiate<sensor_msgs::Imu>());
-        else if (m.getTopic() == IMAGE0_TOPIC)
-            img0_callback(m.instantiate<sensor_msgs::Image>());
+        else if (m.getTopic() == IMAGE0_TOPIC) {
+            sensor_msgs::ImageConstPtr image_msg = m.instantiate<sensor_msgs::Image>();
+            if (image_msg)
+                img0_callback(image_msg);
+            else {
+                sensor_msgs::CompressedImageConstPtr compressed_msg =
+                    m.instantiate<sensor_msgs::CompressedImage>();
+                if (compressed_msg)
+                    img0_compressed_callback(compressed_msg);
+                else
+                    ROS_WARN_STREAM("Unsupported image message type on topic " << IMAGE0_TOPIC);
+            }
+        }
         processoneimage();
     }
     while (swf_optimization->feature_buf.size() > 10);
@@ -203,7 +243,3 @@ int main(int argc, char** argv) {
     std::cout << "finish\n";
     return 0;
 }
-
-
-
-

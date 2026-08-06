@@ -1,0 +1,18 @@
+<launch>
+  <!-- FLOW-VIO reads the rosbag offline. The node decodes Odin1's
+       sensor_msgs/CompressedImage messages directly. -->
+  <arg name="config" default="$(find flow_vio)/../../yaml/odin1_config.yaml" />
+  <arg name="bag" default="$(env HOME)/catkin_ws/odin1-office.bag" />
+  <arg name="output" default="$(env HOME)/catkin_ws/odin1-office-flow-vio.txt" />
+  <arg name="rviz" default="false" />
+
+  <node name="flow_vio_odin1"
+        pkg="flow_vio"
+        type="flow_vio_node"
+        output="screen"
+        args="$(arg config) $(arg bag) $(arg output)" />
+
+  <group if="$(arg rviz)">
+    <include file="$(find flow_vio)/launch/visual_inertial_rviz.launch" />
+  </group>
+</launch>

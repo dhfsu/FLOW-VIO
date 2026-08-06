@@ -1,0 +1,42 @@
+%YAML:1.0
+---
+
+######################################### BAG TOPIC SETTING #########################################
+# Odin1 bags store the camera as sensor_msgs/CompressedImage.
+imu_topic: "/odin1/imu"
+image0_topic: "/odin1/image/compressed"
+cam0_calib: "odin1_cam0.yaml"
+image_width: 1600
+image_height: 1296
+
+####################################### IMU PARAMETER SETTING #######################################
+# Values from the Odin1 calibration used by VINS-Mono.
+gyr_nonlinearity: 0.01
+int_n: 0.01
+acc_n: 3.9939570888238808e-03
+gyr_n: 1.5636343949698187e-03
+acc_w: 6.4356659353532566e-05
+gyr_w: 3.5640318696367613e-05
+g_norm: 9.80511
+
+######################################## EXTRINSIC PARAMETER ########################################
+# IMU (body) <- camera transform, from VINS-Mono's Odin1 configuration.
+body_T_cam0: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: d
+   data: [ 0.01422002,  0.00267851,  0.99989530, -0.01060846,
+          -0.99974044,  0.01783988,  0.01417003,  0.05590449,
+          -0.01780006, -0.99983727,  0.00293150,  0.02392566,
+           0.0,         0.0,         0.0,         1.0 ]
+
+######################################## CAMERA SETTING ########################################
+feature_min_dist: 40
+FOCAL_LENGTH: 738.15
+SHOW_TRACK: 1
+
+######################################## OTHER SETTING ########################################
+FLOW_BACK: 1
+ESTIMATE_EXTRINSIC: 1
+SKIP_TIME: 1
+FRAME_NUM_FOR_REJECTION: 20

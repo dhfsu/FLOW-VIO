@@ -17,24 +17,17 @@ Clone the repository to your catkin workspace (for example `~/catkin_ws/`):
 cd ~/catkin_ws/src/
 git clone https://github.com/xiaohong-huang/FLOW-VIO.git
 ```
-Build the OpenCV4 (>=4.3.0):
+The project uses the system OpenCV4 installation (version >=4.3.0):
 ```
-#Clone the Opencv to the folder
-cd ~/catkin_ws/src/FLOW-VIO
-git clone https://github.com/opencv/opencv.git
-cd opencv
-
-#Switch the blanch to OpenCV 4.10.0. 
-git checkout 4.10.0
-
-#build opencv
-mkdir build
-cd build
-cmake ..
-make -j8
-#Do not use "make install"
+pkg-config --modversion opencv4
 ```
-Note, the OpenCV version must be larger than 4.3.0 (the newest version is 4.10.0, which is work well in our project). Otherwise, some of the function may not work well.
+If OpenCV is not installed in the container, install its development packages
+before configuring the workspace (or provide an equivalent system installation):
+```
+sudo apt-get install libopencv-dev python3-opencv
+```
+The CMake files use `find_package(OpenCV 4 REQUIRED CONFIG)`, so a locally
+cloned OpenCV source tree under `src/FLOW-VIO/opencv` is no longer required.
 
 Then build the package with:
 ```
@@ -43,12 +36,22 @@ catkin_make
 ```
 
 
-## 3. Run FLOW-VIO with EuRoC, TUM-VI, 4Seasons and Our dataset
+## 3. Run FLOW-VIO with EuRoC, TUM-VI, Odin1, 4Seasons and Our dataset
 Download the EuRoC bag [Dataset](https://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets).
 
 Download the TUM-VI (512x512) bag [Dataset](https://cvg.cit.tum.de/data/datasets/visual-inertial-dataset). 
 
 Download Our bag [Dataset](https://1drv.ms/f/s!ApdCy_pJvU0qyVsLB906CNjAEQiH).
+
+For the Odin1 bag, use the dedicated launch file. It reads the bag offline and
+decodes Odin1's `sensor_msgs/CompressedImage` camera messages directly:
+```
+source ~/catkin_ws/devel/setup.bash
+roslaunch flow_vio odin1.launch \
+  bag:=~/catkin_ws/odin1-office.bag \
+  output:=~/catkin_ws/odin1-office-flow-vio.txt \
+  rviz:=true
+```
 
 Download the 4Seasons Dataset using the [dm-vio-python-tools](https://github.com/lukasvst/dm-vio-python-tools) and follow the instructions in [4seasons_bag_generate](https://github.com/xiaohong-huang/FLOW-VIO/blob/main/4seasons_bag_generate) to generate the ROS bag.
 
@@ -74,6 +77,7 @@ You could use the following settings to perform VIO in different datasets.
 ```
 euroc_config.yaml       #EuRoC dataset
 tum_config.yaml         #TUM-VI dataset
+odin1_config.yaml       #Odin1 dataset
 my_config.yaml          #Our dataset
 4seasons_config.yaml    #4Seasons dataset
 ```
