@@ -32,7 +32,7 @@ endif()
 #   CONFIG
 # )
 
-include(../../opencv/build/OpenCVConfig.cmake)
+find_package(OpenCV 4 REQUIRED CONFIG)
 
 catkin_package(
   INCLUDE_DIRS include

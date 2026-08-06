@@ -18,8 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
     rosbag)
     
     
-# find_package(OpenCV 4 REQUIRED)
-include(../../opencv/build/OpenCVConfig.cmake)
+find_package(OpenCV 4 REQUIRED CONFIG)
 find_package(Eigen3)
 find_package ( OpenMP )
 

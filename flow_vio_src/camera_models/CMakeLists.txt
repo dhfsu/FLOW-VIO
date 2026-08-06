@@ -17,8 +17,7 @@ include_directories(${Boost_INCLUDE_DIRS}
 ${EIGEN3_INCLUDE_DIR}
 )
 
-# find_package(OpenCV 4 REQUIRED)
-include(../../opencv/build/OpenCVConfig.cmake)
+find_package(OpenCV 4 REQUIRED CONFIG)
 # include(/home/orangepi/opencv_src/opencv-3.4/build/OpenCVConfig.cmake)
 # include(/home/huang/A/opencv-3.2/build/OpenCVConfig.cmake)
 # message(WARNING "OpenCV_VERSION: ${OpenCV_VERSION}")
