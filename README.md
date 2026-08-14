@@ -43,20 +43,7 @@ Download the TUM-VI (512x512) bag [Dataset](https://cvg.cit.tum.de/data/datasets
 
 Download Our bag [Dataset](https://1drv.ms/f/s!ApdCy_pJvU0qyVsLB906CNjAEQiH).
 
-For the Odin1 bag, use the dedicated launch file. It reads the bag offline and
-decodes Odin1's `sensor_msgs/CompressedImage` camera messages directly:
-```
-source ~/catkin_ws/devel/setup.bash
-roslaunch flow_vio odin1.launch \
-  bag:=~/catkin_ws/odin1-office.bag \
-  output:=~/catkin_ws/odin1-office-flow-vio.txt \
-  rviz:=true
-```
-
 Download the 4Seasons Dataset using the [dm-vio-python-tools](https://github.com/lukasvst/dm-vio-python-tools) and follow the instructions in [4seasons_bag_generate](https://github.com/xiaohong-huang/FLOW-VIO/blob/main/4seasons_bag_generate) to generate the ROS bag.
-
-
-
 
 
 Launching the rviz via:
@@ -67,7 +54,7 @@ roslaunch flow_vio visual_inertial_rviz.launch
 Open another terminal and run the project by:
 ```
 source ~/catkin_ws/devel/setup.bash
-rosrun flow_vio flow_vio_node src/FLOW-VIO/yaml/SETTING.yaml YOUR_BAG_FOLDER/BAG_NAME.bag ourput.csv
+rosrun flow_vio flow_vio_node src/FLOW-VIO/yaml/SETTING.yaml YOUR_BAG_FOLDER/BAG_NAME.bag ourput.tum
 ```
 YOUR_BAG_FOLDER is the folder where you save the dataset. 
 BAG_NAME is the name of the dataset. 
