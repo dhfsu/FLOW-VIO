@@ -17,7 +17,7 @@
 #include <std_msgs/ByteMultiArray.h>
 #include <sensor_msgs/MagneticField.h>
 #include <sensor_msgs/NavSatFix.h>
-#include<random>
+#include <random>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/CompressedImage.h>
@@ -27,20 +27,20 @@
 #include <nav_msgs/Path.h>
 #include <nav_msgs/Odometry.h>
 
-SWFOptimization* swf_optimization;
+SWFOptimization *swf_optimization;
 queue<sensor_msgs::ImuConstPtr> imu_buf;
 queue<sensor_msgs::PointCloudConstPtr> feature_buf;
 queue<sensor_msgs::ImageConstPtr> img0_buf;
 queue<sensor_msgs::ImageConstPtr> img1_buf;
-double start_timestamp = 0;//1896.28
+double start_timestamp = 0; // 1896.28
 TicToc system_time;
 double last_system_time;
 
-
-
-cv::Mat getImageFromMsg(const sensor_msgs::ImageConstPtr& img_msg) {
+cv::Mat getImageFromMsg(const sensor_msgs::ImageConstPtr &img_msg)
+{
     cv_bridge::CvImageConstPtr ptr;
-    if (img_msg->encoding == "8UC1") {
+    if (img_msg->encoding == "8UC1")
+    {
         sensor_msgs::Image img;
         img.header = img_msg->header;
         img.height = img_msg->height;
@@ -50,32 +50,37 @@ cv::Mat getImageFromMsg(const sensor_msgs::ImageConstPtr& img_msg) {
         img.data = img_msg->data;
         img.encoding = "mono8";
         ptr = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::MONO8);
-    } else
+    }
+    else
         ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
     cv::Mat img = ptr->image.clone();
     return img;
 }
 
-
 // 把 ROS 的 sensor_msgs::CompressedImageConstPtr 解码并转成灰度的 cv::Mat，供后续处理使用
-cv::Mat getImageFromCompressedMsg(const sensor_msgs::CompressedImageConstPtr& img_msg) {
+cv::Mat getImageFromCompressedMsg(const sensor_msgs::CompressedImageConstPtr &img_msg)
+{
     if (img_msg->data.empty())
         return cv::Mat();
-    try {
+    try
+    {
         cv_bridge::CvImageConstPtr ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
         return ptr->image.clone();
-    } catch (const cv_bridge::Exception& e) {
+    }
+    catch (const cv_bridge::Exception &e)
+    {
         ROS_ERROR_STREAM("Failed to decode compressed image: " << e.what());
         return cv::Mat();
     }
 }
 
-
-void processoneimage() {
+void processoneimage()
+{
     cv::Mat image0, image1;
     double time = 0;
 
-    if (!img0_buf.empty() ) {
+    if (!img0_buf.empty())
+    {
         time = img0_buf.front()->header.stamp.toSec();
         image0 = getImageFromMsg(img0_buf.front());
         img0_buf.pop();
@@ -85,8 +90,8 @@ void processoneimage() {
         swf_optimization->InputImage(time, image0, image1);
 }
 
-
-void img0_callback(const sensor_msgs::ImageConstPtr& img_msg) {
+void img0_callback(const sensor_msgs::ImageConstPtr &img_msg)
+{
     if (!img_msg)
         return;
     if (img_msg->header.stamp.toSec() < start_timestamp)
@@ -95,8 +100,8 @@ void img0_callback(const sensor_msgs::ImageConstPtr& img_msg) {
     processoneimage();
 }
 
-
-void img0_compressed_callback(const sensor_msgs::CompressedImageConstPtr& img_msg) {
+void img0_compressed_callback(const sensor_msgs::CompressedImageConstPtr &img_msg)
+{
     if (!img_msg)
         return;
     if (img_msg->header.stamp.toSec() < start_timestamp)
@@ -107,8 +112,8 @@ void img0_compressed_callback(const sensor_msgs::CompressedImageConstPtr& img_ms
         swf_optimization->InputImage(img_msg->header.stamp.toSec(), image, cv::Mat());
 }
 
-
-void imu_callback(const sensor_msgs::ImuConstPtr& imu_msg) {
+void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
+{
 
     if (imu_msg->header.stamp.toSec() < start_timestamp - 1)
         return;
@@ -127,24 +132,18 @@ void imu_callback(const sensor_msgs::ImuConstPtr& imu_msg) {
     return;
 }
 
-
-
-
-void bind_cpu(std::vector<int>cpu_set) {
-
+void bind_cpu(std::vector<int> cpu_set)
+{
 }
 
-
-
-void sig_handler( int sig ) {
+void sig_handler(int sig)
+{
     std::cout << "\tabort_\r\n";
-    exit( 0 );
+    exit(0);
 }
 
-
-
-int main(int argc, char** argv) {
-
+int main(int argc, char **argv)
+{
 
     string config_file = argv[1];
     ROS_PATH = argv[2];
@@ -159,10 +158,9 @@ int main(int argc, char** argv) {
 
     LEAK_NUM = SWF_SIZE_IN - 1;
 
-
 #if DEBUG
     time_t t = time(nullptr);
-    struct tm* now = localtime(&t);
+    struct tm *now = localtime(&t);
     std::stringstream timeStr;
     timeStr << now->tm_year + 1900 << "-";
     timeStr << now->tm_mon + 1 << "-";
@@ -175,7 +173,6 @@ int main(int argc, char** argv) {
     LOG_OUT.precision(10);
 #endif
 
-
     swf_optimization = new SWFOptimization();
     swf_optimization->SetParameter();
     printf("waiting for image and imu...");
@@ -183,16 +180,19 @@ int main(int argc, char** argv) {
     bag.open(ROS_PATH, rosbag::bagmode::Read);
     rosbag::View view(bag);
 
-    signal( SIGINT, sig_handler );
-    for ( rosbag::View::iterator it = view.begin(); it != view.end(); ++it) {
+    signal(SIGINT, sig_handler);
+    for (rosbag::View::iterator it = view.begin(); it != view.end(); ++it)
+    {
         auto m = *it;
         if (m.getTopic() == IMU_TOPIC)
             imu_callback(m.instantiate<sensor_msgs::Imu>());
-        else if (m.getTopic() == IMAGE0_TOPIC) {
+        else if (m.getTopic() == IMAGE0_TOPIC)
+        {
             sensor_msgs::ImageConstPtr image_msg = m.instantiate<sensor_msgs::Image>();
             if (image_msg)
                 img0_callback(image_msg);
-            else {
+            else
+            {
                 sensor_msgs::CompressedImageConstPtr compressed_msg =
                     m.instantiate<sensor_msgs::CompressedImage>();
                 if (compressed_msg)
@@ -203,10 +203,10 @@ int main(int argc, char** argv) {
         }
         processoneimage();
     }
-    while (swf_optimization->feature_buf.size() > 10);
+    while (swf_optimization->feature_buf.size() > 10)
+        ;
 
-
-    //As same as ORB-SLAM3, we generate the final resutls for evaluation.
+    // As same as ORB-SLAM3, we generate the final resutls for evaluation.
     std::vector<PosInfo> camera_poses = swf_optimization->RetriveAllPose();
     ofstream foutC(RESULT_PATH, ios::out);
     foutC.setf(ios::fixed, ios::floatfield);
@@ -214,12 +214,14 @@ int main(int argc, char** argv) {
     Eigen::Matrix3d R_WI_WC = swf_optimization->R_WI_WC;
     double scale_factor = swf_optimization->scale_factor;
     static double old_time = 0;
-    for (int i = 0; i < (int)camera_poses.size(); i++) {
+    for (int i = 0; i < (int)camera_poses.size(); i++)
+    {
         Eigen::Matrix3d Ri = R_WI_WC * camera_poses[i].R * RIC[0].transpose();
         Eigen::Vector3d ti = R_WI_WC * camera_poses[i].t * scale_factor - Ri * TIC[0] - Ri * Pgb;
         Eigen::Quaterniond Qi = Eigen::Quaterniond(Ri);
         double time_stamp = camera_poses[i].time_stamp;
-        if (old_time)assert(time_stamp > old_time);
+        if (old_time)
+            assert(time_stamp > old_time);
 
         foutC.precision(9);
         foutC << time_stamp << " ";
@@ -232,7 +234,6 @@ int main(int argc, char** argv) {
               << Qi.z() << " "
               << Qi.w() << endl;
         old_time = time_stamp;
-
     }
     foutC.close();
 

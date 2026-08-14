@@ -10,7 +10,7 @@ void SWFOptimization::InputImage(double t, const cv::Mat &_img, const cv::Mat &_
     TicToc t_process;
 
     if (_img1.empty())
-        //trackImage() 内部还会进行LK 光流跟踪、前后向光流检查、图像边界检查、基础矩阵 RANSAC 外点剔除、新特征点提取、去畸变与特征速度计算
+        // trackImage() 内部还会进行LK 光流跟踪、前后向光流检查、图像边界检查、基础矩阵 RANSAC 外点剔除、新特征点提取、去畸变与特征速度计算
         featureFrame = feature_tracker.trackImage(t, _img);
     else
         featureFrame = feature_tracker.trackImage(t, _img, _img1);
@@ -21,8 +21,8 @@ void SWFOptimization::InputImage(double t, const cv::Mat &_img, const cv::Mat &_
     t_count += 1;
     LOG_OUT << "feature extraction process time:" << t_process.toc() << "," << t_sum / t_count << std::endl;
 
-    //只有满足条件的图像才会进入后端视觉队列
-    //启动阶段的图像仍然会执行 trackImage()，只是特征结果不会进入后端优化。因此前端跟踪器会持续更新，而后端会忽略这段初始化图像。
+    // 只有满足条件的图像才会进入后端视觉队列
+    // 启动阶段的图像仍然会执行 trackImage()，只是特征结果不会进入后端优化。因此前端跟踪器会持续更新，而后端会忽略这段初始化图像。
     if (first_observe_time != 0 && t >= first_observe_time + SKIP_TIME + AVERAGE_TIME + 0.1)
         feature_buf.push(make_pair(t, featureFrame));
 
