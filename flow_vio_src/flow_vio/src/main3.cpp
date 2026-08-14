@@ -57,7 +57,7 @@ cv::Mat getImageFromMsg(const sensor_msgs::ImageConstPtr& img_msg) {
 }
 
 
-
+// 把 ROS 的 sensor_msgs::CompressedImageConstPtr 解码并转成灰度的 cv::Mat，供后续处理使用
 cv::Mat getImageFromCompressedMsg(const sensor_msgs::CompressedImageConstPtr& img_msg) {
     if (img_msg->data.empty())
         return cv::Mat();
@@ -130,7 +130,6 @@ void imu_callback(const sensor_msgs::ImuConstPtr& imu_msg) {
 
 
 
-
 void bind_cpu(std::vector<int>cpu_set) {
 
 }
@@ -141,8 +140,6 @@ void sig_handler( int sig ) {
     std::cout << "\tabort_\r\n";
     exit( 0 );
 }
-
-
 
 
 

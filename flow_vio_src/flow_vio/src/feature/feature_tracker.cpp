@@ -40,28 +40,45 @@ FeatureTracker::FeatureTracker() {
     sum_n = 0;
 }
 
+/*
+根据当前已有特征点生成掩码：
+已存在特征点的位置不可再检测；
+特征点周围 MIN_DIST 范围被屏蔽；
+跟踪时间更长的特征点优先保留。
+这样可以避免新特征点与旧特征点过于密集
+*/
 void FeatureTracker::setMask() {
+    // 初始化当前帧的特征掩码：如果外部提供了全局掩码，则复制一份使用；
+    // 否则创建一张全白掩码，表示整幅图像区域都允许检测特征点。
     if (mask_global.cols != 0)mask = mask_global.clone();
     else mask = cv::Mat(row, col, CV_8UC1, cv::Scalar(255));
 
+    // 保存当前特征点的“连续跟踪帧数、位置和 ID”，便于后续统一排序。
     vector<pair<int, pair<cv::Point2f, int>>> cnt_pts_id;
 
+    // 将现有特征点及其跟踪次数和 ID 打包到临时容器中。
     for (unsigned int i = 0; i < cur_pts.size(); i++)
         cnt_pts_id.push_back(make_pair(track_cnt[i], make_pair(cur_pts[i], ids[i])));
 
+    // 按跟踪次数从大到小排序：跟踪时间越长的特征点优先保留。
     sort(cnt_pts_id.begin(), cnt_pts_id.end(), [](const pair<int, pair<cv::Point2f, int>>& a, const pair<int, pair<cv::Point2f, int>>& b) {
         return a.first > b.first;
     });
 
+    // 清空原有特征点列表，下面根据掩码重新填充。
     cur_pts.clear();
     ids.clear();
     track_cnt.clear();
 
     for (auto& it : cnt_pts_id) {
+        // 掩码值为 255 表示该位置尚未被其他特征点占用。
         if (mask.at<uchar>(it.second.first) == 255) {
             cur_pts.push_back(it.second.first);
             ids.push_back(it.second.second);
             track_cnt.push_back(it.first);
+
+            // 将该特征点周围半径为 MIN_DIST 的区域设为不可用，
+            // 避免新旧特征点过于密集或相互重叠。
             cv::circle(mask, it.second.first, MIN_DIST, 0, -1);
 
         }
@@ -89,6 +106,7 @@ void FeatureTracker::AddImgsRaw(double _cur_time, const cv::Mat& _img) {
 
 map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackImage(double _cur_time, const cv::Mat& _img, const cv::Mat& _img1) {
     TicToc t_r;
+    //保存当前图像和时间，并清空当前帧的特征点容器
     cur_time = _cur_time;
     cur_img = _img;
     row = cur_img.rows;
@@ -97,17 +115,21 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
     cur_pts.clear();
 
 
+    //减弱相邻帧曝光变化对光流跟踪的影响
     if (USE_GRAY_SCALE) {
+        //使用 clone() 是为了创建当前图像的独立副本。后面如果修改 cur_img，不会直接修改传入的原始图像 _img
         cur_img = _img.clone();
         if (exposure_time_file[0] != 0) {
-
+            //prev_time 初始值为 0，表示还没有上一帧图像
             if (prev_time == 0) {
                 std::string line;
                 std::ifstream in = std::ifstream(exposure_time_file);
                 std::cout << exposure_time_file << std::endl;
                 if (in.fail())
                     cout << "File not found" << endl;
+                // 跳过第一行
                 getline(in, line);
+                // 接着逐行读取
                 while (getline(in, line)  && in.good() ) {
 
                     vector<double>b;
@@ -115,11 +137,12 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
                     string field;
                     string::size_type size;
 
+                    // 每行被按空格分割
                     while (getline(sin, field, ' ')) {
                         double d = stod(field, &size);
                         b.push_back(d);
                     }
-
+                    // 假设某一行包括：image_id timestamp exposure_time 这是提取时间辍和曝光时间
                     uint64_t time = b[1] * 1e3;
                     std::cout << time << std::endl;
                     double exp = b[2];
@@ -128,24 +151,34 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
             }
         }
 
+        // 只有存在上一帧时才进行补偿，第一帧没有上一帧，因此不能比较亮度，也不做曝光补偿
         if (prev_time != 0) {
             double cur_exposure_time = -1;
             double prev_exposure_time = -1;
+            // 没有曝光时间文件时，使用整幅灰度图像的像素总和作为亮度估计
             if (exposure_time_file[0] == 0) {
+                //当前帧总体亮度
                 cur_exposure_time = cv::sum(cur_img)(0);
+                //上一帧总体亮度
                 prev_exposure_time = cv::sum(prev_img)(0);
             } else {
+                // 有曝光文件：根据时间戳查找曝光值
+                // 将当前帧和上一帧时间戳都转换成毫秒，然后丢弃早于上一帧时间的曝光记录
                 uint64_t cur_time_i = cur_time * 1e3;
                 uint64_t prev_time_i = prev_time * 1e3;
                 while (exposure_times.front().first < prev_time_i)
                     exposure_times.pop();
+                //接着要求队列头部必须正好对应上一帧
                 assert(exposure_times.front().first == prev_time_i);
+                //取出上一帧曝光值
                 prev_exposure_time = exposure_times.front().second;
                 exposure_times.pop();
+                //再要求下一个记录对应当前帧
                 assert(exposure_times.front().first == cur_time_i);
                 cur_exposure_time = exposure_times.front().second;
             }
 
+            //如果当前帧和上一帧亮度不同，就对其中一帧进行缩放，并限制像素值不超过 255
             double scale = cur_exposure_time / prev_exposure_time;
             LOG_OUT << "灰度缩放:" << scale << "," << prev_exposure_time << "," << cur_exposure_time << std::endl;
             if (scale != 1) {
@@ -171,6 +204,7 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
     } else
         cur_img = _img;
 
+    //如果不是第一帧
     if (prev_pts.size() > 0) {
         vector<uchar> status;
 
@@ -179,7 +213,15 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
 
             vector<float> err;
             if (hasPrediction) {
+                //如果后端提供了预测结果，就优先使用预测作为初始位置
                 cur_pts = predict_pts;
+                //使用 LK 金字塔光流 根据上一帧的特征位置 prev_pts，在当前图像中寻找对应位置 cur_pts
+                // prev_pts上一帧中的特征点坐标，输入  
+                // cur_pts当前帧中的特征点坐标，输出；开启初始流时也是输入
+                // status每个特征点是否跟踪成功，1 成功，0 失败
+                // OPTICAL_LAYER_NUM图像金字塔的最大层数
+                //TermCriteria(...)光流迭代终止条件
+                // OPTFLOW_USE_INITIAL_FLOW，使用 cur_pts 中已有的初始预测位置
                 cv::calcOpticalFlowPyrLK(prev_img, cur_img, prev_pts, cur_pts, status, err, cv::Size(OPTICAL_WINSIZE, OPTICAL_WINSIZE), OPTICAL_LAYER_NUM,
                                          cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, 0.01), cv::OPTFLOW_USE_INITIAL_FLOW);
 
@@ -188,19 +230,21 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
                     if (status[i])
                         succ_num++;
                 }
+                //如果成功跟踪的点少于 10 个 重新执行普通光流
                 if (succ_num < 10)
                     cv::calcOpticalFlowPyrLK(prev_img, cur_img, prev_pts, cur_pts, status, err, cv::Size(OPTICAL_WINSIZE, OPTICAL_WINSIZE), OPTICAL_LAYER_NUM);
             } else
                 cv::calcOpticalFlowPyrLK(prev_img, cur_img, prev_pts, cur_pts, status, err, cv::Size(OPTICAL_WINSIZE, OPTICAL_WINSIZE), OPTICAL_LAYER_NUM);
 
 
-            // reverse check
+            // reverse check 前后向光流检查
             if (FLOW_BACK) {
                 vector<uchar> reverse_status;
                 vector<cv::Point2f> reverse_pts = prev_pts;
                 cv::calcOpticalFlowPyrLK(cur_img, prev_img, cur_pts, reverse_pts, reverse_status, err, cv::Size(OPTICAL_WINSIZE, OPTICAL_WINSIZE), 1,
                                          cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, 0.01), cv::OPTFLOW_USE_INITIAL_FLOW);
                 for (size_t i = 0; i < status.size(); i++) {
+                    //如果前后向回到原位置的误差大于 0.5 像素，就认为该点不可靠
                     if (status[i] && reverse_status[i] && distance(prev_pts[i], reverse_pts[i]) <= 0.5)
                         status[i] = 1;
                     else
@@ -213,13 +257,17 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
 
 
         for (int i = 0; i < int(cur_pts.size()); i++)
+            // 边界检查和同步删除 这里的 inBorder() 命名有些容易误解，它返回 true 实际上表示点在图像边界外
             if (status[i] && inBorder(cur_pts[i]))
                 status[i] = 0;
+        // 按照同一个 status 数组同步删除无效点
         reduceVector(prev_pts, status);
         reduceVector(cur_pts, status);
         reduceVector(ids, status);
         reduceVector(track_cnt, status);
     }
+    
+    // track_cnt 表示一个特征已经连续跟踪了多少帧
     for (auto& n : track_cnt)
         n++;
 
@@ -228,31 +276,35 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
         TicToc t_m;
         setMask();
         //extract MAX_CNT-100 number of features with large energy.
+        //计算需要补充的特征点数量
         int n_max_cnt = MAX_CNT - 100 - static_cast<int>(cur_pts.size());
 
+        //检查掩码并提取主要特征点
         if (n_max_cnt > 0) {
             TicToc t_t;
             if (mask.empty())
                 LOG_OUT << "mask is empty " << endl;
             if (mask.type() != CV_8UC1)
                 LOG_OUT << "mask type wrong " << endl;
-
+            //使用 Shi-Tomasi 角点检测提取特征
             cv::goodFeaturesToTrack(cur_img, n_pts, MAX_CNT - 100 - cur_pts.size(), 0.01, MIN_DIST, mask);
 
         } else
             n_pts.clear();
 
         TicToc t_a;
+        //将这些新点加入 cur_pts，并为其分配新的 ID 和初始跟踪次数
         addPoints();
 
-        //extract 100 number of features with small energy.
+        //extract 100 number of features with small energy. 再补充 100 个低质量特征点
+        // 重新创建掩码，并把所有当前特征点周围半径为 50 像素的区域屏蔽
         if (mask_global.cols != 0)mask = mask_global.clone();
         else mask = cv::Mat(row, col, CV_8UC1, cv::Scalar(255));
         for (auto& it : cur_pts)
             cv::circle(mask, it, 50, 0, -1);
+        //这里的 0.001 比第一阶段的 0.01 更低，因此可以找到质量较低但仍可用于跟踪的角点
         cv::goodFeaturesToTrack(cur_img, n_pts, 100, 0.001, 50, mask);
         addPoints();
-
 
     }
 
@@ -360,16 +412,25 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
 }
 
 void FeatureTracker::rejectWithF() {
+    // 只有当匹配点数量不少于 8 个时，才具备估计基础矩阵的条件。
     if (cur_pts.size() >= 8) {
         TicToc t_f;
+
+        // 基础矩阵应在去畸变后的点上估计；这里将当前帧和上一帧的像素点
+        // 转换到统一的虚拟针孔图像坐标系中。
         vector<cv::Point2f> un_cur_pts(cur_pts.size()), un_prev_pts(prev_pts.size());
         for (unsigned int i = 0; i < cur_pts.size(); i++) {
             Eigen::Vector3d tmp_p;
+
+            // 将当前帧像素点反投影到相机归一化平面。
             m_camera[0]->liftProjective(Eigen::Vector2d(cur_pts[i].x, cur_pts[i].y), tmp_p);
+
+            // 重新投影到以图像中心为原点、FOCAL_LENGTH 为焦距的虚拟图像平面。
             tmp_p.x() = FOCAL_LENGTH * tmp_p.x() / tmp_p.z() + col / 2.0;
             tmp_p.y() = FOCAL_LENGTH * tmp_p.y() / tmp_p.z() + row / 2.0;
             un_cur_pts[i] = cv::Point2f(tmp_p.x(), tmp_p.y());
 
+            // 对上一帧中与当前点对应的像素点执行相同的去畸变和归一化处理。
             m_camera[0]->liftProjective(Eigen::Vector2d(prev_pts[i].x, prev_pts[i].y), tmp_p);
             tmp_p.x() = FOCAL_LENGTH * tmp_p.x() / tmp_p.z() + col / 2.0;
             tmp_p.y() = FOCAL_LENGTH * tmp_p.y() / tmp_p.z() + row / 2.0;
@@ -377,13 +438,17 @@ void FeatureTracker::rejectWithF() {
         }
 
         vector<uchar> status;
+        // 使用 RANSAC 估计两帧之间的基础矩阵。
+        // status[i] 为 1 表示第 i 对匹配满足极几何约束，为 0 表示外点。
         cv::findFundamentalMat(un_cur_pts, un_prev_pts, cv::FM_RANSAC, F_THRESHOLD, 0.99, status);
+
+        // 按照同一个 RANSAC 内点掩码同步删除所有外点，确保点坐标、特征 ID
+        // 和跟踪次数之间仍保持一一对应关系。
         reduceVector(prev_pts, status);
         reduceVector(cur_pts, status);
         reduceVector(cur_un_pts, status);
         reduceVector(ids, status);
         reduceVector(track_cnt, status);
-
 
     }
 }

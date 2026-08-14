@@ -400,17 +400,20 @@ void SWFOptimization::MeasurementProcess() {
         TicToc t_process;
         pair<double, map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>>> feature;
 
+        //取出队首 feature = feature_buf.front()，用 cur_time = feature.first，断言时间严格递增且间隔 > 0.005s
         feature = feature_buf.front();
         cur_time = feature.first;
         ASSERT(!(cur_time <= prev_time2 || cur_time - prev_time2 <= 0.005));
 
+        //若对应时间点的 IMU 尚未到达则返回
         if (!ImuAvailable(cur_time))
             return;
 
+        //弹出图像数据并累计帧数
         feature_buf.pop();
         image_count++;
+        //ImuIntegrate() 将 IMU 数据积分到当前图像时间并更新位姿/速度等状态
         ImuIntegrate();
-
 
         prev_time2 = cur_time;
         headers[image_count - 1] = cur_time;
@@ -423,6 +426,7 @@ void SWFOptimization::MeasurementProcess() {
 
         ImagePostprocess();
 
+        //SlideWindow() 根据策略边缘化并移动窗口
         SlideWindow();
 
 #if USE_ASSERT
@@ -456,6 +460,7 @@ void SWFOptimization::MeasurementProcess() {
         if (solver_flag != Initial) {
             static double travel_distance = 0;
             travel_distance += (Ps[image_count - 1] - old_P).norm();
+            //累积运动距离超过约 1 m 速度足够大 已经处理了至少约 12 帧
             if (!has_excitation && travel_distance > 1 && Vs[image_count - 1].norm() > 0.1 && image_count > 11) {
                 has_excitation = true;
                 enable_output = true;

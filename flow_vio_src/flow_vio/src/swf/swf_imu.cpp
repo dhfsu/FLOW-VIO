@@ -3,27 +3,36 @@
 #include<fstream>
 #include "../factor/initial_factor.h"
 
+//对窗口内每一帧初始化陀螺偏置并估计初始机身朝向（旋转矩阵），用于后续视觉-惯性初始化
 void SWFOptimization::InitializePos() {
+    //将每个时间帧的陀螺偏置 Bgs 置为 0
     for (int i = 0; i < SWF_WINDOW_SIZE + 1; i++)
         Bgs[i].setZero();
 
+    // 打印初始 bias 与平均加速度 acc_mean，便于调试/观测
     LOG_OUT << "initial bgs:" << Bgs[0];
     printf("averge acc %f %f %f\n", acc_mean.x(), acc_mean.y(), acc_mean.z());
 
+    // 构造 mag_mean 为 (0,1,0) —— 表示一个假设的磁矢量（仅用于给定参考水平方向）
     Vector3d mag_mean;
     mag_mean(0) = 0;
     mag_mean(1) = 1;
     mag_mean(2) = 0;
 
     Matrix3d Rwb0;
+    // 以加速度平均值方向作为 z 轴（重力方向），即机身在世界坐标系中“朝下/朝上”的方向
     Eigen::Vector3d z0 = acc_mean.normalized();
+    // 用磁矢量与 z0 的叉乘（通过反对称矩阵实现）得到一个水平向量并归一化，作为 x 轴方向
     Eigen::Vector3d x0 = (Utility::skewSymmetric(mag_mean) * z0).normalized();
+    // 通过 z0 与 x0 的叉乘得到 y 轴，保证右手坐标系且正交
     Eigen::Vector3d y0 = (Utility::skewSymmetric(z0) * x0).normalized();
+    // 构造旋转矩阵
     Rwb0.block(0, 0, 1, 3) = x0.transpose();
     Rwb0.block(1, 0, 1, 3) = y0.transpose();
     Rwb0.block(2, 0, 1, 3) = z0.transpose();
 
 
+    // 将窗口内每帧的初始旋转 Rs 全部设为这个 Rwb0
     for (int i = 0; i < SWF_WINDOW_SIZE + 1; i++)
         Rs[i] = Rwb0;
     LOG_OUT << "init R0: " << endl
@@ -33,12 +42,14 @@ void SWFOptimization::InitializePos() {
 }
 
 
-
+//接收并预处理来自 IMU 的线加速度和角速度数据，然后按时序把样本存入缓冲队列以供后续处理
 void SWFOptimization::InputIMU(double t, const Vector3d& linearAcceleration, const Vector3d& angularVelocity) {
     if (first_observe_time == 0)
         first_observe_time = t;
+    //跳过初始一段时间内的数据（常用于滤除启动抖动或静止期）
     if (t < first_observe_time + SKIP_TIME)
         return;
+    //跳过期之后再累计一段时间的数据用于求平均重力向量（重力方向估计）
     if (t < first_observe_time + SKIP_TIME + AVERAGE_TIME) {
         acc_mean += linearAcceleration;
         acc_count++;
